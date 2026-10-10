@@ -71,6 +71,12 @@ export const translations = {
     coachVerdictTitle: 'Koçun Nihai Yorumu:',
     resetAnswerBtn: 'Yeniden Dene',
     closeBtn: 'Kapat',
+    voiceInputBtn: 'Sesle Yanıtla',
+    voiceStopBtn: 'Kaydı Durdur',
+    voiceListening: 'Mikrofon dinliyor, konuşabilirsiniz...',
+    voiceTranscribing: 'Ses metne dönüştürülüyor...',
+    voiceErrorPermission: 'Mikrofon izni alınamadı veya mikrofon bulunamadı.',
+    voiceUnsupported: 'Tarayıcınız ses tanımayı desteklemiyor.',
 
     // Training Advisor Tab
     trainingHeroTitle: 'Eğitim Geçmişini Analiz Et, Bir Sonraki Adımını Belirle',
@@ -187,6 +193,12 @@ export const translations = {
     coachVerdictTitle: 'Hiring Decision-Maker Verdict:',
     resetAnswerBtn: 'Practice Again',
     closeBtn: 'Close',
+    voiceInputBtn: 'Answer by Voice',
+    voiceStopBtn: 'Stop Recording',
+    voiceListening: 'Microphone active, start speaking...',
+    voiceTranscribing: 'Transcribing speech...',
+    voiceErrorPermission: 'Could not access microphone or permission was denied.',
+    voiceUnsupported: 'Browser does not support speech recognition.',
 
     // Training Advisor Tab
     trainingHeroTitle: 'Analyze Completed Courses & Map Your Next Learning Step',

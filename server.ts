@@ -306,6 +306,43 @@ Perform a rigorous competency audit and output the precise next-step training sy
   }
 });
 
+// 4. Audio Transcription Endpoint (Gemini 3.5 Transcribe)
+app.post('/api/transcribe-audio', async (req, res) => {
+  try {
+    const { audioBase64, mimeType = 'audio/webm', language = 'tr' } = req.body;
+    if (!audioBase64) {
+      return res.status(400).json({ error: 'Audio data is required' });
+    }
+
+    const isTr = language === 'tr';
+    const audioPart = {
+      inlineData: {
+        mimeType: mimeType,
+        data: audioBase64,
+      },
+    };
+
+    const promptText = isTr
+      ? 'Bu Türkçe mülakat cevabı ses kaydını tam ve harfi harfine metne dönüştür. Başka hiçbir açıklama yapma, sadece adayın söylediği konuşma metnini döndür.'
+      : 'Transcribe this interview answer audio verbatim. Return only the spoken text with no additional introductory or concluding remarks.';
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-transcribe',
+      contents: { parts: [audioPart, { text: promptText }] },
+    });
+
+    const transcribedText = response.text?.trim() || '';
+    return res.json({ text: transcribedText });
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('Error in /api/transcribe-audio:', error);
+    return res.status(500).json({
+      error: 'Failed to transcribe audio',
+      message: error?.message || 'Internal Server Error',
+    });
+  }
+});
+
 // Mount Vite or serve static files
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
