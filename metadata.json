@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "NexaCoach - Mülakat & Kariyer Danışmanı",
+  "description": "Üniversite öğrencileri, yeni mezunlar ve iş arayanlar için mülakatçı unvanına özel soru simülasyonu ve eğitim sonrası kariyer yol haritası.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
