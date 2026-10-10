@@ -137,7 +137,7 @@ app.post('/api/interview-evaluate', async (req, res) => {
     const systemInstruction = `You are a strict yet encouraging senior interview coach reviewing a candidate's practice answer.
 The candidate is a university student or new graduate interviewing with an interviewer holding the title "${interviewerTitle || 'Hiring Manager'}".
 
-Analyze their answer and provide objective scores (out of 100) and actionable coaching feedback.
+Analyze their answer and provide objective scores (out of 100), deep qualitative analysis, and actionable step-by-step coaching feedback.
 The response must be valid JSON matching this schema:
 {
   "overallScore": number (1-100),
@@ -151,8 +151,12 @@ The response must be valid JSON matching this schema:
   "relevanceScore": number (1-100),
   "strengths": string[] (2-3 concrete things they did well),
   "areasForImprovement": string[] (2-3 specific gaps or weak points to fix),
+  "keyMissingElement": string (The #1 most critical element missing or needing immediate fix in their answer),
+  "toneAndDelivery": string (Feedback on their professional tone, confidence, modesty vs assertiveness, and ownership),
+  "actionableChecklist": string[] (3 specific, punchy action items the candidate should check off before saying this in an interview),
+  "detectedRedFlags": string[] (Any bad interview habits, filler, shifting blame, or passivity detected; empty array if clean),
   "improvedAnswer": string (A polished, executive-ready STAR answer rewritten using the candidate's core story to maximize impact),
-  "coachVerdict": string (2-3 sentences summarizing the interviewer's perspective)
+  "coachVerdict": string (2-3 sentences summarizing the hiring decision-maker's perspective)
 }
 Write all text in ${isTr ? 'Turkish' : 'English'}.`;
 

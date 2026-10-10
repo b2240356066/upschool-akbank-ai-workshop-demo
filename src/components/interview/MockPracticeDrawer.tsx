@@ -5,11 +5,19 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Sparkles,
   RotateCcw,
   Mic,
-  MicOff,
   Square,
+  TrendingUp,
+  CheckSquare,
+  ArrowRight,
+  ThumbsUp,
+  Copy,
+  Check,
+  Award,
+  Volume2,
 } from 'lucide-react';
 import { InterviewQuestion, AnswerEvaluation, Language } from '../../types';
 import { translations } from '../../locales/translations';
@@ -20,6 +28,13 @@ interface MockPracticeDrawerProps {
   targetRole: string;
   language: Language;
   onClose: () => void;
+}
+
+interface AttemptRecord {
+  attemptNumber: number;
+  score: number;
+  wordCount: number;
+  timeStr: string;
 }
 
 // Global declaration for Web Speech API
@@ -47,11 +62,19 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 
+  // Enhanced feedback state
+  const [attemptHistory, setAttemptHistory] = useState<AttemptRecord[]>([]);
+  const [completedChecklist, setCompletedChecklist] = useState<Record<number, boolean>>({});
+  const [copiedImproved, setCopiedImproved] = useState(false);
+  const [appliedImproved, setAppliedImproved] = useState(false);
+  const [userFeedbackGiven, setUserFeedbackGiven] = useState(false);
+
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
 
   if (!question) return null;
 
@@ -154,7 +177,6 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
           }
 
           setCandidateAnswer((prev) => {
-            // Append recognized text smoothly
             const cleanFinal = finalTranscript.trim();
             const cleanInterim = interimTranscript.trim();
             const textToAdd = [cleanFinal, cleanInterim].filter(Boolean).join(' ');
@@ -207,7 +229,7 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
 
     setIsRecording(false);
 
-    // If candidate answer is still empty or very short, let's transcribe the recorded audio chunks via Gemini
+    // Fallback: If answer is very short, transcribe audio chunks via Gemini
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.onstop = async () => {
         if (streamRef.current) {
@@ -215,7 +237,6 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
           streamRef.current = null;
         }
 
-        // If Web Speech API already populated the answer, we don't need second transcription
         if (candidateAnswer.trim().length > 15) {
           return;
         }
@@ -274,6 +295,7 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Evaluate Answer with Detailed AI Feedback
   const handleEvaluate = async () => {
     if (!candidateAnswer.trim() || isEvaluating) return;
 
@@ -283,6 +305,8 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
 
     setIsEvaluating(true);
     setErrorMsg('');
+    setCompletedChecklist({});
+    setUserFeedbackGiven(false);
 
     try {
       const response = await fetch('/api/interview-evaluate', {
@@ -301,8 +325,21 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
         throw new Error('Değerlendirme servisinde bir hata oluştu.');
       }
 
-      const data = await response.json();
+      const data: AnswerEvaluation = await response.json();
       setEvaluation(data);
+
+      // Track Attempt History
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      setAttemptHistory((prev) => [
+        ...prev,
+        {
+          attemptNumber: prev.length + 1,
+          score: data.overallScore,
+          wordCount,
+          timeStr,
+        },
+      ]);
     } catch (err: unknown) {
       const error = err as Error;
       setErrorMsg(error.message || 'Hata oluştu. Lütfen tekrar deneyin.');
@@ -310,6 +347,37 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
       setIsEvaluating(false);
     }
   };
+
+  // 1-Click apply AI improved answer to editor for rapid iteration
+  const handleApplyToEditor = () => {
+    if (!evaluation?.improvedAnswer) return;
+    setCandidateAnswer(evaluation.improvedAnswer);
+    setAppliedImproved(true);
+    setTimeout(() => setAppliedImproved(false), 2500);
+    // Smooth scroll back up to editor
+    editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    editorRef.current?.focus();
+  };
+
+  const handleCopyImproved = () => {
+    if (!evaluation?.improvedAnswer) return;
+    navigator.clipboard.writeText(evaluation.improvedAnswer);
+    setCopiedImproved(true);
+    setTimeout(() => setCopiedImproved(false), 2000);
+  };
+
+  const toggleChecklistItem = (index: number) => {
+    setCompletedChecklist((prev) => ({
+      ...prev,
+      [index]: !prev[index],
+    }));
+  };
+
+  // Attempt score difference calculation
+  const previousAttempt = attemptHistory.length >= 2 ? attemptHistory[attemptHistory.length - 2] : null;
+  const currentAttempt = attemptHistory.length >= 1 ? attemptHistory[attemptHistory.length - 1] : null;
+  const scoreDelta =
+    currentAttempt && previousAttempt ? currentAttempt.score - previousAttempt.score : null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
@@ -415,7 +483,15 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
               </div>
             )}
 
+            {appliedImproved && (
+              <div className="mb-2 text-xs text-emerald-800 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>{t.appliedToast}</span>
+              </div>
+            )}
+
             <textarea
+              ref={editorRef}
               rows={6}
               value={candidateAnswer}
               onChange={(e) => setCandidateAnswer(e.target.value)}
@@ -468,40 +544,135 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
             </div>
           )}
 
-          {/* Evaluation Results Card */}
+          {/* EVALUATION RESULTS & FEEDBACK MECHANISM */}
           {evaluation && (
-            <div className="mt-6 border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 p-6 space-y-6">
-              {/* Score Hero */}
-              <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-white border border-slate-200">
-                <div>
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                    {t.scoreTitle}
-                  </span>
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
-                      {evaluation.overallScore}
+            <div className="mt-6 border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 p-6 space-y-6 animate-in fade-in duration-300">
+              {/* Score Hero with Attempt Progression */}
+              <div className="p-4 rounded-xl bg-white border border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+                      {t.scoreTitle}
                     </span>
-                    <span className="text-sm text-slate-400 font-medium">/ 100</span>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
+                        {evaluation.overallScore}
+                      </span>
+                      <span className="text-sm text-slate-400 font-medium">/ 100</span>
+
+                      {/* Score Delta Badge */}
+                      {scoreDelta !== null && (
+                        <span
+                          className={`ml-2 text-xs font-bold px-2 py-0.5 rounded-sm border ${
+                            scoreDelta > 0
+                              ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                              : scoreDelta < 0
+                              ? 'text-rose-700 bg-rose-50 border-rose-200'
+                              : 'text-slate-600 bg-slate-100 border-slate-200'
+                          }`}
+                        >
+                          {scoreDelta > 0 ? `+${scoreDelta}` : scoreDelta} {t.scoreDeltaUp}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-center px-3 py-1.5 rounded-lg border border-slate-100 bg-slate-50">
+                      <span className="text-xs text-slate-500 block">{t.starClarityScore}</span>
+                      <span className="text-sm font-bold text-slate-900 tabular-nums">
+                        %{evaluation.clarityScore}
+                      </span>
+                    </div>
+                    <div className="text-center px-3 py-1.5 rounded-lg border border-slate-100 bg-slate-50">
+                      <span className="text-xs text-slate-500 block">{t.starRelevanceScore}</span>
+                      <span className="text-sm font-bold text-slate-900 tabular-nums">
+                        %{evaluation.relevanceScore}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="text-center px-3 py-1.5 rounded-lg border border-slate-100 bg-slate-50">
-                    <span className="text-xs text-slate-500 block">{t.starClarityScore}</span>
-                    <span className="text-sm font-bold text-slate-900 tabular-nums">
-                      %{evaluation.clarityScore}
+                {/* Attempt History Strip */}
+                {attemptHistory.length > 1 && (
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500 overflow-x-auto">
+                    <span className="font-semibold text-slate-700 shrink-0">
+                      {t.attemptHistoryTitle}
                     </span>
+                    <div className="flex items-center gap-2">
+                      {attemptHistory.map((att, idx) => (
+                        <span
+                          key={idx}
+                          className={`px-2 py-0.5 rounded-md border text-[11px] font-mono tabular-nums ${
+                            idx === attemptHistory.length - 1
+                              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold'
+                              : 'bg-slate-50 border-slate-200 text-slate-600'
+                          }`}
+                        >
+                          #{att.attemptNumber}: {att.score} puan ({att.timeStr})
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-center px-3 py-1.5 rounded-lg border border-slate-100 bg-slate-50">
-                    <span className="text-xs text-slate-500 block">{t.starRelevanceScore}</span>
-                    <span className="text-sm font-bold text-slate-900 tabular-nums">
-                      %{evaluation.relevanceScore}
-                    </span>
-                  </div>
-                </div>
+                )}
               </div>
 
-              {/* STAR Dimensions Breakdown */}
+              {/* 1. Most Critical Missing Element (Hero Alert Callout) */}
+              {evaluation.keyMissingElement && (
+                <div className="p-4 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-950 text-xs sm:text-sm">
+                  <div className="flex items-center gap-2 font-bold text-amber-900 mb-1">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>{t.keyMissingTitle}</span>
+                  </div>
+                  <p className="leading-relaxed text-amber-950">{evaluation.keyMissingElement}</p>
+                </div>
+              )}
+
+              {/* 2. Actionable Improvement Checklist */}
+              {evaluation.actionableChecklist && evaluation.actionableChecklist.length > 0 && (
+                <div className="bg-white p-5 rounded-xl border border-indigo-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 text-indigo-950 font-bold text-xs uppercase tracking-wider">
+                      <CheckSquare className="w-4 h-4 text-indigo-600" />
+                      <span>{t.actionableChecklistTitle}</span>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      Düzelttikçe işaretleyin
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {evaluation.actionableChecklist.map((item, idx) => {
+                      const isChecked = Boolean(completedChecklist[idx]);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => toggleChecklistItem(idx)}
+                          className={`w-full text-left p-2.5 rounded-lg border text-xs sm:text-sm transition-all flex items-start gap-2.5 cursor-pointer ${
+                            isChecked
+                              ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900 line-through opacity-75'
+                              : 'bg-slate-50 hover:bg-indigo-50/40 border-slate-200 text-slate-800'
+                          }`}
+                        >
+                          <span
+                            className={`w-4 h-4 rounded-xs border flex items-center justify-center shrink-0 mt-0.5 ${
+                              isChecked
+                                ? 'bg-emerald-600 border-emerald-600 text-white'
+                                : 'border-slate-300 bg-white'
+                            }`}
+                          >
+                            {isChecked && <Check className="w-3 h-3" />}
+                          </span>
+                          <span className="leading-relaxed">{item}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. STAR Dimensions Breakdown */}
               {evaluation.starBreakdown && (
                 <div>
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-2.5">
@@ -509,25 +680,25 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
                   </span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-                      <span className="text-xs text-slate-500 block">Situation</span>
+                      <span className="text-xs text-slate-500 block">Situation (Durum)</span>
                       <span className="text-base font-bold text-slate-900 tabular-nums">
                         {evaluation.starBreakdown.situationScore}/100
                       </span>
                     </div>
                     <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-                      <span className="text-xs text-slate-500 block">Task</span>
+                      <span className="text-xs text-slate-500 block">Task (Görev)</span>
                       <span className="text-base font-bold text-slate-900 tabular-nums">
                         {evaluation.starBreakdown.taskScore}/100
                       </span>
                     </div>
                     <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-                      <span className="text-xs text-slate-500 block">Action</span>
+                      <span className="text-xs text-slate-500 block">Action (Aksiyon)</span>
                       <span className="text-base font-bold text-slate-900 tabular-nums">
                         {evaluation.starBreakdown.actionScore}/100
                       </span>
                     </div>
                     <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-                      <span className="text-xs text-slate-500 block">Result</span>
+                      <span className="text-xs text-slate-500 block">Result (Sonuç)</span>
                       <span className="text-base font-bold text-slate-900 tabular-nums">
                         {evaluation.starBreakdown.resultScore}/100
                       </span>
@@ -536,7 +707,7 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
                 </div>
               )}
 
-              {/* Strengths & Improvements */}
+              {/* 4. Strengths & Improvements */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-emerald-100">
                   <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs uppercase tracking-wider mb-2">
@@ -569,22 +740,85 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
                 </div>
               </div>
 
-              {/* Polished Rewrite */}
-              {evaluation.improvedAnswer && (
-                <div className="bg-indigo-50/60 p-5 rounded-xl border border-indigo-100">
-                  <div className="flex items-center gap-2 text-indigo-950 font-bold text-xs uppercase tracking-wider mb-2">
-                    <Sparkles className="w-4 h-4 text-indigo-600" />
-                    <span>{t.improvedAnswerTitle}</span>
+              {/* 5. Tone & Ownership Delivery Feedback */}
+              {evaluation.toneAndDelivery && (
+                <div className="p-4 rounded-xl bg-white border border-slate-200 text-xs sm:text-sm">
+                  <span className="font-bold text-slate-900 block mb-1">
+                    {t.toneAndDeliveryTitle}
+                  </span>
+                  <p className="text-slate-700 leading-relaxed">
+                    {evaluation.toneAndDelivery}
+                  </p>
+                </div>
+              )}
+
+              {/* 6. Detected Red Flags / Pitfalls */}
+              {evaluation.detectedRedFlags && evaluation.detectedRedFlags.length > 0 && (
+                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs sm:text-sm">
+                  <div className="flex items-center gap-2 text-rose-900 font-bold mb-1.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    <span>{t.redFlagsDetectedTitle}</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-indigo-950 leading-relaxed font-normal whitespace-pre-line bg-white/70 p-3.5 rounded-lg border border-indigo-100/60">
+                  <ul className="space-y-1 text-rose-950">
+                    {evaluation.detectedRedFlags.map((rf, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <span className="font-bold">•</span>
+                        <span>{rf}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* 7. Polished Rewrite with Direct "Apply to Editor" Button */}
+              {evaluation.improvedAnswer && (
+                <div className="bg-indigo-50/70 p-5 rounded-xl border border-indigo-200 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-indigo-950 font-bold text-xs uppercase tracking-wider">
+                      <Sparkles className="w-4 h-4 text-indigo-600" />
+                      <span>{t.improvedAnswerTitle}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyImproved}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-white border border-indigo-200 rounded-md transition-colors cursor-pointer"
+                        title="Kopyala"
+                      >
+                        {copiedImproved ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Kopyalandı</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>Kopyala</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleApplyToEditor}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-md shadow-2xs transition-colors cursor-pointer"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5" />
+                        <span>{t.applyToEditorBtn}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs sm:text-sm text-indigo-950 leading-relaxed font-normal whitespace-pre-line bg-white/80 p-4 rounded-lg border border-indigo-100">
                     {evaluation.improvedAnswer}
                   </p>
                 </div>
               )}
 
-              {/* Coach Verdict */}
+              {/* 8. Hiring Decision-Maker Verdict */}
               {evaluation.coachVerdict && (
-                <div className="bg-slate-900 text-white p-4 rounded-xl text-xs sm:text-sm">
+                <div className="bg-slate-900 text-white p-5 rounded-xl text-xs sm:text-sm">
                   <span className="font-bold text-indigo-300 block mb-1">
                     {t.coachVerdictTitle}
                   </span>
@@ -593,6 +827,31 @@ export const MockPracticeDrawer: React.FC<MockPracticeDrawerProps> = ({
                   </p>
                 </div>
               )}
+
+              {/* 9. Feedback Satisfaction Rating Interaction */}
+              <div className="p-3.5 rounded-lg bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <span className="text-slate-600 font-medium">
+                  {t.feedbackRatingQuestion}
+                </span>
+
+                {!userFeedbackGiven ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUserFeedbackGiven(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold transition-colors cursor-pointer"
+                    >
+                      <ThumbsUp className="w-3.5 h-3.5" />
+                      <span>{t.feedbackHelpfulBtn}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{t.feedbackThanks}</span>
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>

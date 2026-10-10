@@ -56,6 +56,10 @@ export interface AnswerEvaluation {
   relevanceScore: number;
   strengths: string[];
   areasForImprovement: string[];
+  keyMissingElement?: string;
+  toneAndDelivery?: string;
+  actionableChecklist?: string[];
+  detectedRedFlags?: string[];
   improvedAnswer: string;
   coachVerdict: string;
 }
